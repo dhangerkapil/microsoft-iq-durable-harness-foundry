@@ -9,7 +9,10 @@
       Config    Writes the two git-ignored inputs, .env.local and terraform/terraform.tfvars, from the parameters,
                 signs the isolated Azure CLI profile in (device code) and looks up the advisor (the signed-in
                 admin) and the analyst. Existing files are kept unless -Force; differences are reported. The shared
-                resources (-Existing...Id) are recorded in .env.local, where the safety checks read them.
+                resources (-Existing...Id) are recorded in .env.local, where the safety checks read them, and a Web IQ
+                key turns Web IQ on in an existing terraform.tfvars. It changes nothing in Azure. With -WhatIf it
+                writes nothing, so on a fresh clone the run stops after it: run it without -WhatIf first, then
+                preview the Terraform plan with -Step Platform -WhatIf.
       Platform  Terraform: resource group, Foundry account, project and models, registry, Cosmos DB, Application
                 Insights, role assignments, the Work IQ service principal, the toolbox app, the Fabric capacity and,
                 for Foundry IQ, Azure AI Search and the embedding deployment. With -ExistingFoundryAccountId and
@@ -52,7 +55,8 @@
         -ExistingFoundryAccountId /subscriptions/<id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<name> `
         -ExistingFabricCapacityId /subscriptions/<id>/resourceGroups/<rg>/providers/Microsoft.Fabric/capacities/<name>
 .EXAMPLE
-    .\scripts\Deploy-AdvisorTeam.ps1 @parameters -Step Config, Platform -WhatIf   # show config, plan only
+    .\scripts\Deploy-AdvisorTeam.ps1 @parameters -Step Config             # the settings files and the sign-in only
+    .\scripts\Deploy-AdvisorTeam.ps1 @parameters -Step Platform -WhatIf   # then a Terraform plan; nothing changes
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
@@ -326,9 +330,35 @@ if ($Step -contains 'Config') {
             foreach ($key in $tfvars.Keys) { $desiredTf[$key] = & $quoted $tfvars[$key] }
             $desiredTf['user_object_ids'] = '[{0}]' -f (($userIds | ForEach-Object { "`"$_`"" }) -join ', ')
             $desiredTf['web_boundary_terms'] = & $hclList $boundaryTerms
+            # A Web IQ key turns Web IQ on in an existing file too (for example one an earlier -Step Config wrote
+            # without the key): the WebIq step and Terraform read webiq_toolbox_name from it.
+            if ($webIqToolbox -and $existingTf['webiq_toolbox_name'] -ne $desiredTf['webiq_toolbox_name'] -and
+                $PSCmdlet.ShouldProcess($tfvarsFile, "Set webiq_toolbox_name = $($desiredTf['webiq_toolbox_name'])")) {
+                $webIqLine = "webiq_toolbox_name = $($desiredTf['webiq_toolbox_name'])"
+                $tfLines = @(Get-Content -LiteralPath $tfvarsFile)
+                $at = -1
+                for ($i = 0; $i -lt $tfLines.Count; $i++) { if ($tfLines[$i] -match '^\s*webiq_toolbox_name\s*=') { $at = $i; break } }
+                if ($at -ge 0) { $tfLines[$at] = $webIqLine } else { $tfLines += $webIqLine }
+                $tfLines | Set-Content -LiteralPath $tfvarsFile -Encoding utf8
+                $existingTf['webiq_toolbox_name'] = $desiredTf['webiq_toolbox_name']
+            }
             Compare-Settings 'terraform/terraform.tfvars' $desiredTf $existingTf
         }
     }
+}
+
+# Every later step needs the two files the Config step writes. With -WhatIf it writes nothing, so a preview of a fresh
+# clone ends here.
+$missingFiles = @(
+    if (-not (Test-Path -LiteralPath $envFile)) { '.env.local' }
+    if (-not (Test-Path -LiteralPath $tfvarsFile)) { 'terraform/terraform.tfvars' }
+)
+if ($missingFiles.Count) {
+    $missing = "This clone has no $($missingFiles -join ' or ') yet."
+    $next = 'Run -Step Config without -WhatIf first (it writes only .env.local and terraform/terraform.tfvars, both ' +
+        'git-ignored, and signs in; nothing changes in Azure), then -Step Platform -WhatIf to preview the Terraform plan.'
+    if ($WhatIfPreference) { Write-Warning "Preview ends here: $missing $next"; return }
+    throw "$missing $next"
 }
 
 # Every later step runs in the isolated profile.

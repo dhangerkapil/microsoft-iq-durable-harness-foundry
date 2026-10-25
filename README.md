@@ -131,7 +131,8 @@ $deploy = @{
     ResourceGroup  = 'rg-advisor-team'
     AnalystUpn     = '<the analyst user principal name>'
 }
-.\scripts\Deploy-AdvisorTeam.ps1 @deploy -Step Config, Platform -WhatIf        # preview: settings and a Terraform plan
+.\scripts\Deploy-AdvisorTeam.ps1 @deploy -Step Config                           # settings: two git-ignored files, and sign-in
+.\scripts\Deploy-AdvisorTeam.ps1 @deploy -Step Platform -WhatIf                 # preview: a Terraform plan; nothing changes
 .\scripts\Deploy-AdvisorTeam.ps1 @deploy                                        # deploy, without Web IQ
 .\scripts\Deploy-AdvisorTeam.ps1 @deploy -WebIqApiKey (Read-Host 'Web IQ API key' -AsSecureString)   # or with Web IQ
 ```

@@ -64,7 +64,7 @@ All names and data are fictional.
   & "$env:UV_PROJECT_ENVIRONMENT\Scripts\python.exe" -m pip install --pre -e ".[dev,ui]"
   ```
 
-## Step 1: preview
+## Step 1: settings and a preview
 
 ```powershell
 git clone https://github.com/dhangerkapil/microsoft-iq-durable-harness-foundry.git
@@ -75,14 +75,17 @@ $deploy = @{
     ResourceGroup  = 'rg-advisor-team'
     AnalystUpn     = '<the analyst user principal name>'
 }
-.\scripts\Deploy-AdvisorTeam.ps1 @deploy -Step Config, Platform -WhatIf
+.\scripts\Deploy-AdvisorTeam.ps1 @deploy -Step Config
+.\scripts\Deploy-AdvisorTeam.ps1 @deploy -Step Platform -WhatIf
 ```
 
 The Config step writes two git-ignored files, `.env.local` and `terraform/terraform.tfvars`, signs the isolated
 profile in by device code (sign in as the advisor), looks up the advisor and the analyst, and prints the **story
 week**. It also writes `web_boundary_terms`: the names of the fictional clients, the advisor and the analyst, which the
-agents never send to Web IQ. `-WhatIf` then runs a Terraform plan without changing anything. `.env.example` explains
-what `.env.local` holds: the settings the Config step writes, the optional ones, and what later steps record.
+agents never send to Web IQ. It changes nothing in Azure. `-Step Platform -WhatIf` then runs a Terraform plan without
+changing anything. The plan needs those two files, so on a fresh clone run the Config step without `-WhatIf` first: with
+`-WhatIf` it only shows what it would write. `.env.example` explains what `.env.local` holds: the settings the Config
+step writes, the optional ones, and what later steps record.
 
 ## Step 2: deploy
 
