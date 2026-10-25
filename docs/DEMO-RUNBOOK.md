@@ -25,10 +25,10 @@ hand with the analyst account on 2026-10-21). 9.3b ran 189-192 s, now inside its
 prompt. Each step's time is in the [timing table](#timing-table).
 
 - **Review packs on the one hosted agent** (2026-10-25, `advisor-team` version 36). Workflow W3 now runs as durable
-  steps on `advisor-team` itself. `review_packs.py --crash-test --approve` passed in 308 s: process 1 planned, wrote
-  packs 1 and 2 and stopped before pack 3; the step went again in a new session, and process 2 restored packs 1-2 from
-  the state store and wrote pack 3; each draft was previewed. The app's panel does the same on its own. Run segment
-  `packs` in the next full rehearsal.
+  steps on `advisor-team` itself. The rehearsal runner's segment `packs` passed in 307 s (and `review_packs.py
+  --crash-test --approve` in 308 s): process 1 planned, wrote packs 1 and 2 and stopped before pack 3; the step went
+  again in a new session, and process 2 restored packs 1-2 from the state store and wrote pack 3; each draft was
+  previewed. The app's panel does the same on its own (two runs in the app on 2026-10-25, the crash test on in both).
 
 - **The brief** (1.1, 9.2b) arrives in one piece under the lead agent's one line: code adds it exactly as the workflow
   returned it (107-132 s and 155 s). Each fact carries its item, date and IQ; each breach has its own bullet and only a
@@ -182,7 +182,7 @@ what the step depends on. "Last verified" is the 2026-10-23 rehearsal on the hos
 | 9.2b | The 1.1 prompt, revised once | Same | Work IQ consent, Fabric, Web IQ | 240 s | Pass, 155 s |
 | 9.3a | Take the portfolio specialist offline | New | | 40 s | Pass, 13-14 s |
 | 9.3b | The 2.1 prompt, portfolio offline | Same | Work IQ consent, Web IQ | 215 s | 189-192 s: over the old 170 s budget, inside 215 s (2.1's, for the same prompt) |
-| 9.4 | Review packs, crash test on | Review packs panel | Work IQ consent, Fabric, Web IQ (as for a brief; without them each pack is labelled degraded) | 600 s | Pass, 308 s with the crash test, from the command line on version 36 (2026-10-25): process 1 wrote packs 1-2 and stopped; process 2, in a new session, restored them and wrote pack 3 |
+| 9.4 | Review packs, crash test on | Review packs panel | Work IQ consent, Fabric, Web IQ (as for a brief; without them each pack is labelled degraded) | 600 s | Pass, 307 s with the crash test, rehearsal runner on version 36 (2026-10-25): process 1 wrote packs 1-2 and stopped; process 2, in a new session, restored them and wrote pack 3 |
 | O1 setup | Run the morning note and approve it (add-on) | PowerShell: `Invoke-MorningNote.ps1 -Tickers NVDA` | `enable_morning_note` | Target 150 s | 335 s for NVDA (105 s for NVDA, MSFT and AAPL on 2026-10-22) |
 | O1 | What is the house view in this morning's note on NVIDIA | New | O1 setup done today | 90 s | Pass, 36 s (IC-MN-20261023) |
 | O3 | What if NVIDIA falls 20% (add-on) | New | | 150 s | Pass, 73 s |

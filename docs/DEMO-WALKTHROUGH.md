@@ -1065,7 +1065,7 @@ with every specialist agent back online.
    `dwight.schrute@example.com`), Subject and body, and "Approval applies to this exact text only (SHA-256 …)". Click
    **Approve** on each.
 
-**Time:** budget 600 s for the whole run, with the crash test (308 s from the command line, which approves at once).
+**Time:** budget 600 s for the whole run, with the crash test (307 s in the rehearsal runner, which approves at once).
 
 **What happens, and what to say while it runs:**
 

@@ -322,7 +322,7 @@ prompts and judges as the fixed run above:
   same conversation: a conversation interrupted mid-turn stays locked ("A service-backed conversation already has an
   in-flight turn"). The panel, the command-line runner and the rehearsal now send the step again in a new conversation,
   and the run carries over through the state store (2026-10-25, with tests; the next run passed in 308 s).
-- **And one in Fabric IQ.** The video's 2.2 answer gave NVIDIA's weight on October 19 as 23.8%, next to 26.1% for the
+- **And one in Fabric IQ.** A recorded 2.2 answer gave NVIDIA's weight on October 19 as 23.8%, next to 26.1% for the
   same day: Fabric's data agent had computed the month's weights itself, dividing by total value plus cash (the total
   already includes cash). The portfolio agent now asks for the stored `weight_pct` and `sector_weight_pct`, and
   sends the latest figures and the movement as two short questions in parallel: the one long question took about
