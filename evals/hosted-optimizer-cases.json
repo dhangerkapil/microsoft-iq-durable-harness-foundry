@@ -1,0 +1,37 @@
+{
+  "note": "Test cases for optimizing the hosted agent itself. The agent answers each query with its own tools (Work IQ as the signed-in user, Fabric IQ, durable memory), so the optimizer's runs read real Microsoft 365 content: deploy the demo content first. Prompts that write (drafts), arm the crash test or simulate faults are left out. Ground truths describe the demo story; dates follow the story anchor (hydration/story.json).",
+  "agent_model_search_note": "Model search compares only deployments this solution created: Terraform's model_search_deployments (passed by Invoke-FoundryQuality.ps1), or the names listed here. Never list a deployment another workload owns: the optimizer would run on its quota.",
+  "agent_model_search": [],
+  "test_cases": [
+    {
+      "id": "prep",
+      "query": "Prepare me for my Thursday meeting with Michael Scott.",
+      "ground_truth": "A brief under 400 words with Snapshot, Client documents, Since last discussion, Risks and conflicts, Questions to ask and Sources. Meeting: Thursday, October 22, 2026, 10:00-11:00 AM Eastern, from the calendar. Client documents lists every file in Michael's folders with a link: the signed IPS v1 and the portfolio overview in the advisor's OneDrive; the IPS v2 draft and the Q4 review meeting notes on the team's SharePoint site. NVDA 26.1% is above the 25% single-stock limit (the analyst's email of October 19); Information Technology 40.71% is above the 40% sector limit. The house closing moved to December 15 with $400,000 due by December 10; cash after the $50,000 reserve falls short. Tax budget conflict: the signed IPS ($20,000) is in force; the accountant and the unsigned draft say $15,000; both shown, neither silently picked. Michael's 529-plan email is new. Every fact is sourced and dated; no trade, tax or investment advice; ends with a workiq_references block."
+    },
+    {
+      "id": "recall",
+      "query": "In Friday's Q4 portfolio review, what exactly did Michael say about his tax budget and his house? Quote the meeting transcript, and list the action items with their owners and whether each has been done since.",
+      "ground_truth": "Verbatim quotes of Michael's own words from the recorded Q4 portfolio review transcript (with the speaker; transcription errors kept and flagged), about the tax budget and the house. Action items only as the meeting assigned them, with owners: the advisor drafts the IPS update; Michael confirms the house timeline and the tax budget with his accountant. A Done since? column with evidence: the IPS v2 draft exists; Michael's later email moved the closing to December 15. No invented action items."
+    },
+    {
+      "id": "chart",
+      "query": "Find the chart of Michael Scott's NVDA weight against its limit. What were the high and the low since September 1, how close did it come to the limit, and where did it end?",
+      "ground_truth": "The portfolio overview PDF, page 3, Figure 2, verified. High about 24.7% around October 14; low about 22.8% around September 7 or 8; closest to the 25% limit by about 0.3 points; ended at 24.1% on October 16, printed on the chart. Values read from the image are marked approximate and checked against the file's own text (range 22.8% to 24.7%). Says that Work IQ read the chart and the harness verified the page."
+    },
+    {
+      "id": "cross-check",
+      "query": "Since that chart, where does Michael's NVDA position stand now? Check the analyst's latest email against the portfolio data in Fabric, tell me whether they agree, what Michael and the team said about trimming it, and what a trim to the limit would mean.",
+      "ground_truth": "NVDA went from 24.1% on October 16 to 26.1% on October 19. The analyst's email and Fabric IQ agree on 26.1% and $763,857.78 (a disagreement in Fabric's wording would be flagged). A verbatim quote of Michael about trimming, and the Teams exchange between the advisor and the analyst. A trim back to 25% sells about $32,167 and realizes about $25,633 of gains, over both the $20,000 and the $15,000 budgets, computed with the rebalancing check; no recommendation."
+    },
+    {
+      "id": "graph",
+      "query": "How is Work IQ different from just calling the Graph API? Show me side by side on this question: where is the chart of Michael Scott's NVDA position against its limit, and what did Michael ask about it by email?",
+      "ground_truth": "A side-by-side comparison with measured rows: Graph keyword search finds the file but not the page, and returns only email headers; Work IQ finds the page with the chart and Michael's question by meaning, with citations and sensitivity labels. A Graph app needs Files.Read and Mail.Read; Work IQ needs one delegated permission plus the tenant policy. Work IQ fetch is Graph through the same governed door."
+    },
+    {
+      "id": "changed",
+      "query": "What changed since my last discussion with Michael Scott?",
+      "ground_truth": "Compared with the saved last discussion (the Q4 portfolio review on October 16): NVDA rose from 24.1% to 26.1%, above the 25% limit; the house closing moved from spring 2027 to December 15 with $400,000 due by December 10; the unsigned IPS v2 draft proposes a $15,000 tax budget against the signed $20,000; Michael asked about a 529 plan. Each change is dated and sourced."
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+# Baseline configuration of the advisor team (the lead's instructions and every role's skill), in the layout the Foundry
+# agent optimizer reads (azure-ai-agentserver-optimization). The deployment's TEAM_LEAD_DEPLOYMENT overrides the model.
+model: team-lead
+instruction_file: instructions.md
+skill_dir: skills

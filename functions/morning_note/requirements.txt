@@ -1,0 +1,16 @@
+# The morning note's packages, as tested together (the Functions package for Agent Framework workflows is a preview).
+agent-framework-azurefunctions==1.0.0b260922
+agent-framework-durabletask==1.0.0b260922
+agent-framework-core==1.21.0
+agent-framework-foundry==1.14.1
+agent-framework-openai==1.16.0
+azure-ai-projects==2.7.0
+azure-functions==1.25.0
+azure-functions-durable==1.7.0
+durabletask==1.12.0
+durabletask.azuremanaged==1.12.0
+azure-identity==1.26.0
+httpx==0.28.1
+openai==3.31.0
+tzdata==2026.5
+mcp==1.30.0

@@ -1,0 +1,19 @@
+{
+  "description": "Additions to shared resources this solution may make. Anything else that differs from the baseline fails the inventory diff.",
+  "namePatterns": [
+    "^proj-advteam-",
+    "^team-",
+    "^advisor-team",
+    "^ui-advisor-team",
+    "^Advisor Team",
+    "^Team Portfolio",
+    "^team_portfolio",
+    "-proj-advteam-[a-z0-9]+(-|$)"
+  ],
+  "resourceIdPatterns": [
+    "/projects/proj-advteam-[a-z0-9]+$",
+    "/deployments/team-(lead|specialist|judge)$"
+  ],
+  "note": "Role assignments and permission grants are approved only for principals listed in <work>\\principals.json, which the deployment writes from Terraform outputs.",
+  "foundryNote": "Foundry names the agent identity blueprints and identities it creates for this project <account>-proj-advteam-<suffix>[-<agent>]-AgentIdentity[Blueprint]."
+}

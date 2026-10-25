@@ -1,0 +1,38 @@
+{
+  "generated_utc": "2026-10-21T07:21:24.581841Z",
+  "tables": {
+    "clients": 15,
+    "ips_profiles": 15,
+    "securities": 20,
+    "prices_daily": 1600,
+    "positions_daily": 14800,
+    "position_changes": 555,
+    "client_summary_daily": 1200,
+    "transactions": 7
+  },
+  "michael_scott": {
+    "client_id": "C0007",
+    "discussion_date": "2026-10-16",
+    "as_of_date": "2026-10-19",
+    "nvda_weight_discussion_pct": 24.1,
+    "nvda_weight_as_of_pct": 26.1,
+    "it_sector_weight_discussion_pct": 39.1,
+    "it_sector_weight_as_of_pct": 40.71,
+    "nvda_price_discussion": 182.4,
+    "nvda_price_as_of": 202.83,
+    "nvda_quantity": 3766.0,
+    "nvda_market_value_as_of_usd": 763857.78,
+    "nvda_basis_per_share": 41.2,
+    "nvda_unrealized_gain_as_of_usd": 608698.58,
+    "total_value_discussion_usd": 2849919.5,
+    "total_value_as_of_usd": 2926762.55,
+    "cash_and_equivalents_as_of_usd": 282219.15,
+    "trim_to_25pct_limit_usd": 32167.14,
+    "trim_realized_gain_usd": 25633.17,
+    "single_stock_limit_pct": 25.0,
+    "sector_limit_pct": 40.0,
+    "tax_budget_ips_v1_usd": 20000.0,
+    "liquidity_reserve_usd": 50000.0
+  },
+  "note": "Synthetic demo data. Microsoft 365 content and evaluation ground truth must use these numbers."
+}

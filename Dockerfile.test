@@ -1,0 +1,21 @@
+# Validation image for ACR builds, with the image's exact package versions (no local packages needed):
+#   az acr build --registry <acr> --file Dockerfile.test --no-push .
+FROM python:3.14-slim
+WORKDIR /app
+COPY requirements-image.txt ./
+RUN pip install --no-cache-dir --disable-pip-version-check -r requirements-image.txt \
+ && pip install --no-cache-dir --disable-pip-version-check "pytest>=8,<9" "pytest-asyncio>=1,<2" "ag-ui-protocol>=0.1.14,<0.2"
+COPY pyproject.toml ./
+COPY src ./src
+RUN pip install --no-cache-dir --disable-pip-version-check --no-deps -e .
+COPY .agent_configs ./.agent_configs
+COPY tests ./tests
+COPY scripts ./scripts
+COPY terraform ./terraform
+COPY data ./data
+COPY evals ./evals
+COPY functions ./functions
+ENV PYTHONUNBUFFERED=1
+RUN python -m compileall -q src \
+ && python -c "import advisor_team.solo, advisor_team.hosts.hosted, advisor_team.team; print('imports ok')" \
+ && python -m pytest -q -p no:cacheprovider tests

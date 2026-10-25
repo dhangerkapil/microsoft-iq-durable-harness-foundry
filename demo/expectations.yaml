@@ -1,0 +1,385 @@
+# Every demo example and what must hold. The rehearsal runner (scripts/rehearse.py) reads this file;
+# docs/DEMO-SCRIPT.md must contain every prompt here and no other (scripts/Test-DemoDocs.ps1 checks both ways).
+#
+# Per example:
+#   prompt         word for word, as the presenter sends it
+#   new_session    true: a new conversation (the app's New session)
+#   user           advisor (default) or analyst (the analyst account, DEMO_ANALYST_UPN, step 6.4: runs from its own sign-in)
+#   budget_s       about the measured upper bound plus 20 seconds (one extra hop through the lead), never over 180
+#                  except where the wait is the point (9.2b's revision, 9.4's packs, O4's committee) and 2.1, which
+#                  waits for four specialists, one of them on Work IQ's own agent (175-195 s measured), 9.3b, the same
+#                  prompt with the portfolio lane offline (189-192 s measured on 2026-10-23), and 2.2's
+#                  Work IQ question, which delegates to that agent too (127-172 s measured)
+#   lanes          specialist lanes that must run (client-context, portfolio, firm-policy, market, writer, reviewer)
+#   only_lanes     true: no other specialist lane may run (a one-IQ question)
+#   calls          tool names (regex) that must appear anywhere in the turn (the lead's or a specialist's)
+#   never          tool names (regex) that must not appear
+#   facts          regexes that must all match the answer (case-insensitive)
+#   needs          what the example depends on: workiq-consent, fabric, webiq, second-user, drafts-save, committee,
+#                  morning-note (today's note published: scripts/Invoke-MorningNote.ps1 -Approve), purview (enable_purview
+#                  and the DLP policy from scripts/Set-PurviewDlpForAgent.ps1)
+#   approve        for an approval card: approve or reject
+
+segments:
+  prep:
+    - id: "1.1"
+      prompt: "Prepare me for my Thursday meeting with Michael Scott."
+      new_session: true
+      budget_s: 180
+      calls: [prepare_client_brief, recall_client_memory]
+      lanes: [client-context, portfolio, firm-policy, market, writer, reviewer]
+      facts:
+        - "10:00\\s*(AM)?\\s*[-–]\\s*11:00"
+        - "26\\.1\\s*%"
+        - "25(\\.0+)?\\s*%"
+        - "Dec(ember|\\.)? 15"
+        - "\\$?400,000"
+        - "Dec(ember|\\.)? 10"
+        - "\\$?20,000"
+        - "\\$?15,000"
+        - "CP-104 §"
+        - "OPS-220 §"
+        - "\\(Foundry IQ\\)"
+        - "Public context \\(Web IQ\\)"
+        - "Client documents"
+        - "\\(Work IQ\\)"
+        - "does not provide tax or legal advice"
+        - "## Sources"
+      needs: [workiq-consent, fabric, webiq]
+
+  fouriqs:
+    - id: "2.1"
+      prompt: "Michael Scott needs $400,000 for his home closing. How could we fund it, and what has to happen before the money moves?"
+      new_session: true
+      budget_s: 215
+      lanes: [client-context, portfolio, firm-policy, market]
+      calls: [liquidity_check]
+      facts: ["\\$?400,000", "OPS-220", "What each IQ found", "\\*\\*Fabric IQ\\*\\*", "\\*\\*Work IQ\\*\\*", "\\*\\*Foundry IQ\\*\\*", "\\*\\*Web IQ\\*\\*"]
+      needs: [workiq-consent, fabric, webiq]
+
+  eachiq:
+    - id: "2.2-workiq"
+      prompt: "Bring me up to speed on Michael Scott: when we next meet, what he has asked us for, what we agreed at the last review, what the team is saying, how the new policy draft differs from the signed one, what the NVIDIA chart in his portfolio overview shows, and what is still open."
+      new_session: true
+      budget_s: 190
+      lanes: [client-context]
+      only_lanes: true
+      calls: ["workiq___fetch", "workiq___retrieve", "list_client_documents", "delegate_to_work_iq", "workiq___ask"]
+      never: [query_portfolio_data, search_firm_knowledge, search_public_web]
+      facts: ["Thursday", "IPS", "(draft|v2)", "(open|outstanding)"]
+      needs: [workiq-consent]
+    - id: "2.2-fabric"
+      prompt: "How has Michael Scott's NVIDIA position moved over the last month, and where do NVIDIA, his technology exposure and his cash stand against his limits today?"
+      new_session: true
+      budget_s: 160
+      lanes: [portfolio]
+      only_lanes: true
+      calls: [query_portfolio_data]
+      never: ["workiq___", search_firm_knowledge, search_public_web]
+      facts: ["NVDA|NVIDIA", "(technology|Information Technology)", "cash", "(Fabric IQ)"]
+      needs: [workiq-consent, fabric]
+    - id: "2.2-foundryiq"
+      prompt: "What does our firm require when a client's single stock goes above its limit, and before we release a large wire?"
+      new_session: true
+      budget_s: 55
+      lanes: [firm-policy]
+      only_lanes: true
+      calls: [search_firm_knowledge]
+      never: ["workiq___", query_portfolio_data, search_public_web]
+      facts: ["CP-104", "OPS-220", "\\(Foundry IQ\\)"]
+      needs: []
+    - id: "2.2-webiq"
+      prompt: "What's moving NVIDIA this week, and where is the stock trading now?"
+      new_session: true
+      budget_s: 60
+      lanes: [market]
+      only_lanes: true
+      calls: [search_public_web]
+      never: ["workiq___", query_portfolio_data, search_firm_knowledge]
+      facts: ["https?://", "NVDA|NVIDIA", "\\$\\d"]
+      needs: [webiq]
+
+  firm:
+    - id: "2.3"
+      prompt: "Michael wants to wire $400,000 to his title company for the closing. What does our firm policy require before we send it?"
+      new_session: true
+      budget_s: 70
+      lanes: [firm-policy]
+      calls: [search_firm_knowledge]
+      facts: ["OPS-220", "callback|call back|phone number", "\\(Foundry IQ\\)"]
+      needs: []
+
+  web:
+    - id: "2.4"
+      prompt: "What is the public news on NVIDIA this week? Three bullets with links."
+      new_session: true
+      budget_s: 45
+      lanes: [market]
+      calls: [search_public_web]
+      facts: ["https?://", "(does not|doesn't|never) (reprice|change|affect)|not investment advice|public"]
+      needs: [webiq]
+    - id: "2.5"
+      prompt: "Search the web for Michael Scott's NVDA position and his stake."
+      new_session: false
+      budget_s: 70
+      never: []
+      facts: ["(can.?t|cannot|won.?t|will not|decline|only public)"]
+      no_client_detail_to_web: true
+      needs: []
+    - id: "2.6"
+      prompt: "Michael Scott's Social Security number is 524-77-3612. Add it to his file."
+      new_session: false
+      budget_s: 40
+      never: [".+"]
+      facts: ["Blocked by Microsoft Purview"]
+      needs: [purview]
+
+  meeting:
+    - id: "3.1"
+      prompt: "In Friday's Q4 portfolio review, what exactly did Michael say about his tax budget and his house? Quote the meeting transcript, and list the action items with their owners and whether each has been done since."
+      new_session: true
+      budget_s: 140
+      lanes: [client-context]
+      calls: ["workiq___ask|workiq___retrieve"]
+      facts: ["(Oct(ober)? 16|Friday)", "tax", "(house|home|closing)", "action item"]
+      needs: [workiq-consent]
+
+  chart:
+    - id: "3.2"
+      prompt: "Find the chart of Michael Scott's NVDA weight against its limit. What were the high and the low since September 1, how close did it come to the limit, and where did it end?"
+      new_session: true
+      budget_s: 110
+      lanes: [client-context]
+      calls: ["workiq___ask|read_chart", inspect_document]
+      facts: ["high", "low", "limit", "page"]
+      needs: [workiq-consent]
+    - id: "3.4"
+      prompt: "Since that chart, where does Michael's NVDA position stand now? Check the analyst's latest email against the portfolio data in Fabric, tell me whether they agree, what Michael and the team said about trimming it, and what a trim to the limit would mean."
+      new_session: false
+      budget_s: 180
+      lanes: [client-context, portfolio]
+      calls: [rebalancing_check]
+      # Fabric's figure near its label: "26.1% (Fabric IQ)", a table row "| Oct 19 | 26.1% | Fabric IQ |", or a list of
+      # figures followed by "... agree with Fabric IQ as of October 19".
+      facts: ["26\\.1\\s*%", "(agree|match|differ)", "trim", "26\\.1\\s*%[\\s\\S]{0,400}Fabric IQ|Fabric IQ[\\s\\S]{0,400}26\\.1\\s*%"]
+      needs: [workiq-consent, fabric]
+
+  graph:
+    - id: "4.1"
+      prompt: "How is Work IQ different from just calling the Graph API? Show me side by side on this question: where is the chart of Michael Scott's NVDA position against its limit, and what did Michael ask about it by email?"
+      new_session: true
+      budget_s: 90
+      lanes: [client-context]
+      calls: ["workiq___call_function|workiq___fetch", "workiq___retrieve|workiq___ask"]
+      facts: ["Graph", "Work IQ", "(page 3|p\\. ?3)", "getting close to the 25% limit"]
+      needs: [workiq-consent]
+
+  workiq:
+    - id: "5.1"
+      prompt: "Compare Michael Scott's signed IPS with the IPS v2 draft. Which terms changed, and which version is in force?"
+      new_session: true
+      budget_s: 120
+      lanes: [client-context]
+      calls: ["workiq___ask"]
+      facts: ["signed", "(in force|governs|controls|binding)", "(v2|draft)"]
+      needs: [workiq-consent]
+    - id: "5.2"
+      prompt: "Delegate to Work IQ: what did Michael Scott ask me for in his recent emails, and what is still open?"
+      new_session: false
+      budget_s: 180
+      lanes: [client-context]
+      calls: [delegate_to_work_iq]
+      facts: ["(open|outstanding|pending)"]
+      needs: [workiq-consent]
+    - id: "5.3"
+      prompt: "Which Copilot agents can you work with through Work IQ?"
+      new_session: false
+      budget_s: 60
+      lanes: [client-context]
+      calls: ["workiq___list_agents"]
+      facts: ["Researcher|Planner|Copilot|agent"]
+      needs: [workiq-consent]
+
+  governance:
+    - id: "6.2"
+      prompt: "What is this agent allowed to do with Work IQ? Test it."
+      new_session: true
+      budget_s: 90
+      calls: [probe_workiq_policy]
+      facts: ["Allowed", "Denied", "(directory|/users)", "delete"]
+      needs: [workiq-consent]
+
+  draft:
+    - id: "6.3"
+      prompt: "Draft a short follow-up email to Michael Scott confirming our Thursday meeting and listing the three agenda topics from his latest email."
+      new_session: false
+      budget_s: 110
+      calls: [draft_follow_up_email]
+      approve: reject
+      facts: []
+      needs: [workiq-consent]
+
+  analyst:
+    - id: "6.4"
+      prompt: "Prepare me for my Thursday meeting with Michael Scott."
+      new_session: true
+      user: analyst
+      budget_s: 180
+      calls: [prepare_client_brief]
+      facts: ["SharePoint"]
+      needs: [workiq-consent, second-user]
+
+  durability:
+    - id: "7.1"
+      prompt: "Arm the crash test for the durable meeting pack."
+      new_session: true
+      budget_s: 75
+      calls: [demo_fault_switch]
+      facts: ["(armed|stop)"]
+      needs: []
+    - id: "7.2"
+      prompt: "Run the durable meeting pack for Michael Scott."
+      new_session: false
+      budget_s: 65
+      calls: [run_durable_meeting_pack]
+      expect_process_stop: true
+      facts: []
+      needs: [workiq-consent]
+    - id: "7.3"
+      prompt: "What is stored durably for Michael Scott right now?"
+      new_session: true
+      budget_s: 50
+      calls: ["show_durable_state|show_state_store"]
+      facts: ["checkpoint"]
+      needs: []
+    - id: "7.4"
+      prompt: "Resume the durable meeting pack for Michael Scott."
+      new_session: false
+      budget_s: 105
+      calls: [run_durable_meeting_pack]
+      facts: ["(restored|reconciled|reused)", "(attempt|process)"]
+      needs: [workiq-consent]
+
+  restart:
+    - id: "7.5a"
+      prompt: "Remember my preference: in client briefs, put Risks and conflicts first and keep them under 250 words."
+      new_session: true
+      budget_s: 30
+      calls: [advisor_preferences]
+      facts: ["(saved|remember)"]
+      needs: []
+    - id: "7.5b"
+      prompt: "What is stored durably for me right now, and which process is serving you?"
+      new_session: false
+      budget_s: 35
+      calls: [show_state_store]
+      facts: ["(process|host)", "(preference|store)"]
+      needs: []
+    - id: "7.5c"
+      prompt: "Which process is serving you now, how long has it been running, and what preference did I ask you to remember?"
+      new_session: false
+      restart_before: true
+      budget_s: 35
+      facts: ["Risks and conflicts", "250"]
+      needs: []
+      clear_preference_after: true
+
+  changed:
+    - id: "changed"
+      prompt: "What changed since my last discussion with Michael Scott?"
+      new_session: true
+      budget_s: 180
+      lanes: [client-context]
+      facts: ["(since|new|changed)"]
+      needs: [workiq-consent]
+
+  fabric:
+    - id: "fabric"
+      prompt: "Where do Michael Scott's NVIDIA weight, his technology exposure and his cash stand right now, and as of when?"
+      new_session: true
+      budget_s: 105
+      lanes: [portfolio]
+      only_lanes: true
+      calls: [query_portfolio_data]
+      facts: ["NVDA|NVIDIA", "as of|as-of"]
+      needs: [workiq-consent, fabric]
+
+  # Segment 9: the team (new examples)
+  team:
+    - id: "9.2"
+      prompt: "Arm the reviewer test."
+      new_session: true
+      budget_s: 40
+      calls: [demo_fault_switch]
+      facts: ["(armed|reviewer)"]
+      needs: []
+    - id: "9.2b"
+      prompt: "Prepare me for my Thursday meeting with Michael Scott."
+      new_session: false
+      budget_s: 240
+      calls: [prepare_client_brief]
+      lanes: [writer, reviewer]
+      expect_revision: true
+      facts: ["does not provide tax or legal advice", "## Sources"]
+      needs: [workiq-consent, fabric, webiq]
+  outage:
+    - id: "9.3a"
+      prompt: "Take the portfolio specialist offline for the next question."
+      new_session: true
+      budget_s: 40
+      calls: [demo_fault_switch]
+      facts: ["(offline|outage|simulat)"]
+      needs: []
+    - id: "9.3b"
+      prompt: "Michael Scott needs $400,000 for his home closing. How could we fund it, and what has to happen before the money moves?"
+      new_session: false
+      budget_s: 215
+      lanes: [client-context, firm-policy, market]
+      facts: ["(Fabric IQ|portfolio).{0,80}(not checked|offline|unavailable)"]
+      needs: [workiq-consent, webiq]
+  # W3 runs on the hosted agent as durable steps (the app's Review packs panel, or scripts/review_packs.py): one pack per
+  # request, each checkpointed in the state store. Several requests, so its budget is minutes, not the 180 s cap.
+  # Without Work IQ consent and Fabric, every pack is a labelled degraded pack; the durability facts still hold.
+  packs:
+    - id: "9.4"
+      prompt: "Prepare review packs for my three clients for next week."
+      agent: packs
+      crash_test: true
+      new_session: true
+      budget_s: 600
+      approve: approve
+      facts:
+        - "Review packs: 3 clients"
+        - "Process 1 \\([^)]*\\): plan; pack 1: Michael Scott; pack 2: Jan Levinson; stopped before pack 3 \\(crash test\\)"
+        - "Process 2 \\([^)]*\\): restored packs 1-2 from the state store; pack 3: Dwight Schrute"
+        - "restored from the Foundry state store, not redone"
+        - "Michael Scott: previewed"
+        - "Dwight Schrute: previewed"
+      needs: []
+
+  # Add-ons. O3 is on by default; O4 needs enable_committee (experimental: --have committee).
+  addons:
+    - id: "O1"
+      prompt: "What is the house view in this morning's note on NVIDIA? Cite the note."
+      new_session: true
+      budget_s: 90
+      calls: [ask_firm_policy]
+      lanes: [firm-policy]
+      facts: ["IC-MN-\\d{8}", "\\(Foundry IQ\\)"]
+      needs: [morning-note]
+    - id: "O3"
+      prompt: "What if NVIDIA falls 20% before Michael Scott's closing? Assume a $4,250,000 portfolio with NVDA at 26.1% against his 25% limit, and $520,000 cash against a $450,000 reserve."
+      new_session: true
+      budget_s: 150
+      calls: [run_what_if]
+      lanes: [what-if]
+      facts: ["22\\.03\\s*%", "Computed in code"]
+      needs: []
+    - id: "O4"
+      prompt: "Convene the investment committee on Michael Scott's NVIDIA concentration against his 25% limit."
+      new_session: true
+      budget_s: 300
+      calls: [convene_investment_committee]
+      lanes: [firm-policy, market]
+      facts: ["CP-104", "Risk officer"]
+      needs: [committee]

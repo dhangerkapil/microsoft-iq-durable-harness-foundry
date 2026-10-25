@@ -1,0 +1,6 @@
+# Baseline configuration of the Investment Advisor Agent with Microsoft IQ, in the layout the Foundry agent optimizer reads
+# (azure-ai-agentserver-optimization). The optimizer writes improved candidates next to this folder; apply a winner
+# with evals/Invoke-QualityLoop.ps1. The deployment's AZURE_AI_MODEL_DEPLOYMENT_NAME overrides the model below.
+model: gpt-5.6-luna
+instruction_file: instructions.md
+skill_dir: skills

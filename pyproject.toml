@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "investment-advisor-multi-agent"
+version = "0.1.0"
+description = "Investment Advisor multi-agent team on Microsoft Foundry: one hosted agent, a team of Agent Framework agents and durable workflows, grounded in Work IQ, Fabric IQ, Foundry IQ and Web IQ"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+  # Ranges cover both the versions on the internal package proxy (local dev) and the image's exact pins
+  # (requirements-image.txt, installed from PyPI in the Azure Container Registry build).
+  "agent-framework-core>=1.21.0,<2",
+  "agent-framework-foundry>=1.14.1,<2",
+  "agent-framework-foundry-hosting>=1.0.0b261008,<1.1",
+  "agent-framework-azure-cosmos>=1.0.0b261002,<1.1",
+  "agent-framework-orchestrations>=1.3.1,<2",
+  "agent-framework-monty>=1.0.0b261008,<1.1",
+  "agent-framework-purview>=1.0.0b261008,<1.1",
+  "azure-ai-agentserver-optimization==1.0.0b1",
+  # agent-framework-foundry 1.15 caps azure-ai-projects below 2.8.
+  "azure-ai-projects>=2.7,<2.8",
+  "azure-identity>=1.26,<2",
+  "azure-keyvault-keys>=4.11,<5",
+  "cryptography>=46,<48",
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  # agent-framework-foundry-hosting requires mcp<2.
+  "mcp>=1.24,<2",
+  "msal>=1.39,<2",
+  "PyJWT[crypto]>=2.10,<3",
+  "pypdf>=6.1,<7",
+  "pypdfium2>=4.30,<5",
+  "pyyaml>=6,<7",
+  "uvicorn>=0.35,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9", "pytest-asyncio>=1,<2", "ruff>=0.13,<1"]
+ui = ["ag-ui-protocol>=0.1.14,<0.2"]
+# Add-ons, off by default.
+# Scripts only: the rehearsal runner's browser checks connect to a running Edge over CDP.
+tools = ["playwright>=1.55,<2"]
+
+[project.scripts]
+advisor-team = "advisor_team.hosts.hosted:main"
+advisor-team-console = "advisor_team.hosts.console:main"
+advisor-team-ui = "advisor_team.ui.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/advisor_team"]
+
+[tool.uv]
+# Prereleases only where a dependency pins one (the Foundry hosting, Cosmos, Purview and Monty packages are betas).
+prerelease = "if-necessary"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

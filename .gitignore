@@ -1,0 +1,42 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+!*.tfvars.sample
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.tfstate.lock.info
+.terraformrc
+terraform.rc
+*.tfplan
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+
+# Local settings and generated work
+.env
+.env.*
+!.env.example
+work/
+foundry-quality.json
+.inventory/
+
+# Front end
+node_modules/
+ui/coverage/
+ui/*.tsbuildinfo
+
+# Azure Functions (add-on O1)
+functions/**/local.settings.json
+functions/**/.python_packages/
