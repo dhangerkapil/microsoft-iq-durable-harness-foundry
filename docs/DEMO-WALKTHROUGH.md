@@ -1279,16 +1279,18 @@ is Work IQ's application ID, the same in every tenant. The Agent 365 and Purview
 Microsoft 365 connector in Defender for Cloud Apps); `MicrosoftGraphActivityLogs` needs an Entra diagnostic setting that
 sends the Graph activity logs to the Microsoft Sentinel workspace onboarded to the Defender portal.
 
-One user's Work IQ calls, in four logs (6.5; set `user` first; select a row for **Inspect record**):
+One user's Work IQ calls, in four logs (6.5; set `user` first; select a row for **Inspect record**). `IdentityInfo` and
+`AgentsInfo` are snapshots taken a few times a day, so the query gives them their own windows: a short `since` would
+otherwise hide them, and with them the Agent 365 and Graph rows.
 
 ```kusto
 // One user's calls to the investment advisor agents, every Work IQ call made for them, and every prompt Purview blocked
 let user = "advisor@contoso.onmicrosoft.com";
 let since = ago(1d);
 let workIq = "fdcc1f02-fc51-4226-8753-f668596af7f7";
-let oid = toscalar(IdentityInfo | where AccountUpn =~ user | summarize arg_max(Timestamp, AccountObjectId) | project AccountObjectId);
-let name = toscalar(IdentityInfo | where AccountUpn =~ user | summarize arg_max(Timestamp, AccountDisplayName) | project AccountDisplayName);
-let agents = AgentsInfo | where Name startswith "advisor-team" | summarize arg_max(Timestamp, Name) by EntraAgentID;
+let oid = toscalar(IdentityInfo | where Timestamp > ago(14d) and AccountUpn =~ user | summarize arg_max(Timestamp, AccountObjectId) | project AccountObjectId);
+let name = toscalar(IdentityInfo | where Timestamp > ago(14d) and AccountUpn =~ user | summarize arg_max(Timestamp, AccountDisplayName) | project AccountDisplayName);
+let agents = AgentsInfo | where Timestamp > ago(7d) and Name startswith "advisor-team" | summarize arg_max(Timestamp, Name) by EntraAgentID;
 union
 (CloudAppEvents | where Timestamp > since and ActionType == "InvokeAgent" and tostring(RawEventData.UserId) =~ user
   | extend EntraAgentID = tostring(RawEventData.TargetAgentId) | join kind=inner agents on EntraAgentID
