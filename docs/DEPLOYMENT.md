@@ -81,8 +81,8 @@ $deploy = @{
 The Config step writes two git-ignored files, `.env.local` and `terraform/terraform.tfvars`, signs the isolated
 profile in by device code (sign in as the advisor), looks up the advisor and the analyst, and prints the **story
 week**. It also writes `web_boundary_terms`: the names of the fictional clients, the advisor and the analyst, which the
-agents never send to Web IQ. `-WhatIf` then runs a Terraform plan without changing anything. `.env.example` lists the
-settings `.env.local` can hold.
+agents never send to Web IQ. `-WhatIf` then runs a Terraform plan without changing anything. `.env.example` explains
+what `.env.local` holds: the settings the Config step writes, the optional ones, and what later steps record.
 
 ## Step 2: deploy
 
@@ -119,7 +119,7 @@ Useful parameters:
 | `-SpecialistLocation` | the main account | A separate account in this region holds only `team-specialist`, for quota |
 | `-SearchLocation` | the region | Region for a new Azure AI Search service |
 | `-FabricSku`, `-FabricLocation` | `F8`, the region | `''` skips Fabric |
-| `-ExistingFoundryAccountId`, `-ExistingSearchServiceId`, `-ExistingFabricCapacityId` | none (create) | Reuse shared resources under new names ([ISOLATION.md](ISOLATION.md)) |
+| `-ExistingFoundryAccountId`, `-ExistingSearchServiceId`, `-ExistingFabricCapacityId` | `EXISTING_*` in `.env.local`, else none (create) | Reuse shared resources under new names ([ISOLATION.md](ISOLATION.md)). Recorded in `.env.local`, where the safety checks read them; a value that differs from `.env.local` stops the run, unless `-Force` |
 | `-NameSuffix` | the profile name | Suffix for this deployment's tenant-wide names |
 | `-ProfileName` | `demo` | The isolated profile's folder |
 | `-AgentName` | `advisor-team` | The main hosted agent's name |

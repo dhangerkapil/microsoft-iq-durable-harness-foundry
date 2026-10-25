@@ -8,7 +8,8 @@
     Steps, in order (each is idempotent; rerun any of them with -Step):
       Config    Writes the two git-ignored inputs, .env.local and terraform/terraform.tfvars, from the parameters,
                 signs the isolated Azure CLI profile in (device code) and looks up the advisor (the signed-in
-                admin) and the analyst. Existing files are kept unless -Force; differences are reported.
+                admin) and the analyst. Existing files are kept unless -Force; differences are reported. The shared
+                resources (-Existing...Id) are recorded in .env.local, where the safety checks read them.
       Platform  Terraform: resource group, Foundry account, project and models, registry, Cosmos DB, Application
                 Insights, role assignments, the Work IQ service principal, the toolbox app, the Fabric capacity and,
                 for Foundry IQ, Azure AI Search and the embedding deployment. With -ExistingFoundryAccountId and
@@ -79,6 +80,7 @@ param(
     # Fabric is an optional story source; '' skips the capacity, the data agent and its toolbox.
     [ValidatePattern('^(|F(2|4|8|16|32|64|128|256|512|1024|2048))$')][string]$FabricSku = 'F8',
     [string]$FabricLocation = '',
+    # The three -Existing...Id parameters default to EXISTING_* in .env.local, and the Config step records them there.
     # Use an existing Fabric capacity (resource ID, for example in another resource group) instead of creating one;
     # this deployment's workspace goes on it. -FabricSku is then ignored.
     [ValidatePattern('(?i)^(|/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.Fabric/capacities/[^/]+)$')]
@@ -137,6 +139,28 @@ function Compare-Settings([string]$Label, $Desired, $Existing) {
     if ($extra) { Write-Output "  also set there, not managed by this script: $($extra -join ', ')" }
 }
 
+# The shared resources to reuse reach Terraform through terraform.tfvars, while the safety checks for shared resources
+# (Test-Preflight.ps1, Get-SharedInventory.ps1 and the plan gate) read EXISTING_* from .env.local, so both must name
+# the same ones. A parameter left out takes the value .env.local holds; the Config step records the parameters there.
+$recordedEnv = Read-KeyValues $envFile '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$'
+function Resolve-SharedResourceId([string]$Key, [string]$Parameter, [string]$Given) {
+    $recorded = "$($recordedEnv[$Key])".Trim('"')
+    if (-not $Given) { return $recorded }
+    if ($recorded -and $recorded -ne $Given -and -not $Force) {
+        throw (".env.local has $Key=$recorded, but -$Parameter is $Given. The safety checks read .env.local and " +
+            'Terraform the parameter, so they must match: correct one of them, or rerun with -Force to rewrite .env.local.')
+    }
+    $Given
+}
+$ExistingFoundryAccountId = Resolve-SharedResourceId 'EXISTING_FOUNDRY_ACCOUNT_ID' 'ExistingFoundryAccountId' $ExistingFoundryAccountId
+$ExistingSearchServiceId = Resolve-SharedResourceId 'EXISTING_SEARCH_SERVICE_ID' 'ExistingSearchServiceId' $ExistingSearchServiceId
+$ExistingFabricCapacityId = Resolve-SharedResourceId 'EXISTING_FABRIC_CAPACITY_ID' 'ExistingFabricCapacityId' $ExistingFabricCapacityId
+$sharedResourceIds = [ordered]@{
+    EXISTING_FOUNDRY_ACCOUNT_ID = $ExistingFoundryAccountId
+    EXISTING_SEARCH_SERVICE_ID  = $ExistingSearchServiceId
+    EXISTING_FABRIC_CAPACITY_ID = $ExistingFabricCapacityId
+}
+
 function Invoke-Script([string]$Description, [scriptblock]$Action) {
     if ($PSCmdlet.ShouldProcess($Description)) {
         & $Action
@@ -176,6 +200,8 @@ if ($Step -contains 'Config') {
         # Tenant-wide names (Entra apps, Fabric workspace) carry the profile, so deployments never collide.
         TEAM_NAME_SUFFIX      = $(if ($NameSuffix) { $NameSuffix } else { $ProfileName })
     }
+    # The shared resources, for the safety checks (Terraform gets them through terraform.tfvars).
+    foreach ($key in $sharedResourceIds.Keys) { if ($sharedResourceIds[$key]) { $baseEnv[$key] = $sharedResourceIds[$key] } }
     $existingEnv = Read-KeyValues $envFile '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$'
     # The story week: the parameter, else the deployment's existing week, else the next Thursday.
     $storyDate = if ($StoryMeetingDate) { $StoryMeetingDate }
@@ -228,6 +254,16 @@ if ($Step -contains 'Config') {
                 Set-EnvLocalValue @{ STORY_MEETING_DATE = $storyDate }
                 if ($existingEnv['STORY_MEETING_DATE']) { Write-Warning "The story week moved from $($existingEnv['STORY_MEETING_DATE']) to ${storyDate}: rerun -Step Fabric, Content and record the review again." }
                 $existingEnv['STORY_MEETING_DATE'] = $storyDate
+            }
+            # The shared resources must be in .env.local too, even when it was written before they were given: the
+            # safety checks read them from there.
+            $missingShared = @{}
+            foreach ($key in $sharedResourceIds.Keys) {
+                if ($sharedResourceIds[$key] -and -not "$($existingEnv[$key])") { $missingShared[$key] = $sharedResourceIds[$key] }
+            }
+            if ($missingShared.Count -and $PSCmdlet.ShouldProcess($envFile, "Record $($missingShared.Keys -join ', ')")) {
+                Set-EnvLocalValue $missingShared
+                foreach ($key in $missingShared.Keys) { $existingEnv[$key] = $missingShared[$key] }
             }
             Compare-Settings '.env.local' $desiredEnv $existingEnv
         }

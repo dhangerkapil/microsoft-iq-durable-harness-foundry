@@ -186,8 +186,9 @@ registry, Application Insights, Work IQ API Copilot Credits and Web IQ usage.
 ## Isolation
 
 The deployment can create everything in a new resource group, or sit next to an existing Foundry account, Azure AI
-Search service and Fabric capacity (`EXISTING_*` in `.env.local`) and add only items with its own names: a project
-`proj-advteam-<suffix>`, the `team-*` deployments, toolboxes and search items, a Fabric workspace "Advisor Team".
+Search service and Fabric capacity (the deploy script's `-Existing…Id` parameters) and add only items with its own
+names: a project `proj-advteam-<suffix>`, the `team-*` deployments, toolboxes and search items, a Fabric workspace
+"Advisor Team".
 Guardrails act before a change: a preflight that refuses taken names, a Terraform plan gate that refuses updates and
 deletes of anything shared, and an inventory diff that fails on anything but the approved additions. Every sign-in,
 the Terraform state and the work files live in an isolated profile under `%LOCALAPPDATA%\advisor-team\<TEAM_PROFILE>`.

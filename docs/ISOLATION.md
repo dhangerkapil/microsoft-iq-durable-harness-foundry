@@ -10,7 +10,7 @@ uses, the guardrails that act before a change, the isolated local profile, and w
 
 | | Complete isolation | Logical isolation |
 |---|---|---|
-| When | `EXISTING_*` are empty (the default) | You set `EXISTING_FOUNDRY_ACCOUNT_ID`, `EXISTING_SEARCH_SERVICE_ID` and/or `EXISTING_FABRIC_CAPACITY_ID` in `.env.local` (or the matching `-Existing…Id` parameters) |
+| When | `EXISTING_*` are empty (the default) | You pass `-ExistingFoundryAccountId`, `-ExistingSearchServiceId` and/or `-ExistingFabricCapacityId` to the deploy script. The Config step records them in `.env.local` as `EXISTING_*`, where the guardrails read them, so later runs can leave them out |
 | What's created | Everything, in a new resource group: the Foundry account and its models, Azure AI Search, the Fabric capacity, the registry, Cosmos DB, the app, Application Insights | Everything that isn't shared, in a new resource group; inside each shared resource, only additions under this solution's own names |
 | What's shared | Only the tenant (Entra ID, the Work IQ tenant policy, Agent 365, Defender) | The tenant, plus the shared resources' limits and load |
 | Removal | `Remove-AdvisorTeam.ps1` destroys it all | `Remove-AdvisorTeam.ps1` keeps the shared resources and removes this solution's additions from them (see below) |
@@ -63,7 +63,8 @@ flowchart LR
    toolboxes; Search indexes, knowledge sources and knowledge bases; Fabric workspaces and their items; Entra
    applications, service principals and delegated grants. Only GET requests.
 3. **The plan gate** (`scripts/check_plan.py`, wired into `scripts/Invoke-TerraformApply.ps1`). Every Terraform plan is
-   exported and checked before apply. Inside a shared scope (the `EXISTING_*` resources and their resource groups), a
+   exported and checked before apply. Inside a shared scope (the shared resources and their resource groups, from
+   `EXISTING_*` in `.env.local` and from the plan's own `existing_*` variables), a
    plan may only **create** items whose names match `scripts/approved-additions.json`, plus role assignments, which are
    listed for review. Updates and deletes there are refused unless this state created the item, and resource actions
    and update-only resources on shared items are always refused. A refused plan applies nothing. Separately, any plan
@@ -105,7 +106,7 @@ signs the profile in by device code (and signs out first, so a stale Microsoft G
 | `msal`, `docker`, `azd`, `browser` | Other caches | |
 
 Your default `%USERPROFILE%\.azure` is never read or written, so other terminals, editors and projects keep their own
-sign-ins. `.env.local` (git-ignored) holds the profile's settings; `.env.example` lists them. Settings named `TEAM_*`,
+sign-ins. `.env.local` (git-ignored) holds the profile's settings; `.env.example` explains them. Settings named `TEAM_*`,
 `EXISTING_*`, `DEMO_*`, `WEB_*`, `WEBIQ_*`, `STORY_*`, `DRAFT_*`, `FABRIC_*`, `FOUNDRY_*` and `ADVISOR_*` are exported
 to the process.
 

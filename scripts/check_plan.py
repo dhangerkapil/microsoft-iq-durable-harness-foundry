@@ -3,8 +3,9 @@ approved additions.
 
 Usage: python scripts/check_plan.py <plan.json>   (terraform show -json <plan> > plan.json)
 
-Shared scopes come from EXISTING_FOUNDRY_ACCOUNT_ID, EXISTING_SEARCH_SERVICE_ID and EXISTING_FABRIC_CAPACITY_ID (and
-their resource groups). Inside a shared scope a plan may only *create* items whose names match
+Shared scopes are the shared resources and their resource groups: EXISTING_FOUNDRY_ACCOUNT_ID, EXISTING_SEARCH_SERVICE_ID
+and EXISTING_FABRIC_CAPACITY_ID from .env.local, and the plan's own existing_* variables, so the gate knows them even
+when one of the two is missing. Inside a shared scope a plan may only *create* items whose names match
 scripts/approved-additions.json, or role assignments (listed for review). Updates and deletes there are allowed only
 for items this state created (Terraform can't update what it doesn't own, except through actions, which are refused).
 """
@@ -18,10 +19,15 @@ import sys
 from pathlib import Path
 
 REFUSED_TYPES = ("azapi_resource_action", "azapi_update_resource")
+SHARED_SETTINGS = ("EXISTING_FOUNDRY_ACCOUNT_ID", "EXISTING_SEARCH_SERVICE_ID", "EXISTING_FABRIC_CAPACITY_ID")
 
 
-def shared_scopes() -> list[str]:
-    ids = [os.environ.get(k, "") for k in ("EXISTING_FOUNDRY_ACCOUNT_ID", "EXISTING_SEARCH_SERVICE_ID", "EXISTING_FABRIC_CAPACITY_ID")]
+def shared_scopes(plan: dict | None = None) -> list[str]:
+    variables = (plan or {}).get("variables") or {}
+    ids = [os.environ.get(k, "") for k in SHARED_SETTINGS]
+    for k in SHARED_SETTINGS:
+        variable = variables.get(k.lower())
+        ids.append(str(variable.get("value") or "") if isinstance(variable, dict) else "")
     scopes = set()
     for rid in filter(None, ids):
         rid = rid.lower().rstrip("/")
@@ -47,7 +53,7 @@ def target_of(values: dict) -> str:
 
 def main(plan_file: str) -> int:
     plan = json.loads(Path(plan_file).read_text(encoding="utf-8"))
-    scopes = shared_scopes()
+    scopes = shared_scopes(plan)
     if not scopes:
         print("Plan gate: no shared resources configured; nothing to check.")
         return 0
