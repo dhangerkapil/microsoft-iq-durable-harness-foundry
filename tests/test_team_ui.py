@@ -150,3 +150,28 @@ def test_specialists_input_and_output_reach_the_browser_but_never_the_stored_run
     stored = stream.record.model_dump_json()
     assert answer not in stored and "secret-code" not in stored and '"input"' not in stored
 
+
+def test_a_specialists_result_reads_as_json_not_as_escaped_text():
+    from advisor_team.ui.events import lane_payload
+
+    # The agent records a tool's result as its text items, a JSON list of JSON strings; a passage holds JSON too.
+    passage = json.dumps([{"ref_id": 0, "content": "CP-104 §3.1 A position above the limit"}])
+    recorded = json.dumps([json.dumps({"source": "Foundry IQ", "passages": [{"text": passage}], "token": "abc"})])
+    shown = lane_payload(json.dumps({"question": "limits"}), recorded)
+    assert '"ref_id": 0' in shown["output"] and '\\"' not in shown["output"]
+    assert '"passages": [' in shown["output"]  # only the text items' list is unwrapped; the tool's own lists stay
+    assert "CP-104 §3.1" in shown["output"]
+    assert '"token": "[redacted]"' in shown["output"]  # redaction by field name reaches inside the text item
+    assert shown["output_truncated"] is False and '"question": "limits"' in shown["input"]
+
+    # Cut at 4,000 characters, a result is no longer JSON: it still reads one level down, emoji included.
+    item = json.dumps({"results": [{"subject": "Closing moved 🏠", "body": "x" * 5000}]}, ensure_ascii=False)
+    shown = lane_payload("{}", json.dumps([item])[:4000] + " …")
+    assert shown["output"].startswith('{"results": [{"subject": "Closing moved 🏠", "body": "xxx')
+    assert shown["output"].endswith(" …") and shown["output_truncated"] is True
+
+    # A cut between an emoji's two escaped halves leaves no half behind to break the stream's UTF-8.
+    shown = lane_payload("{}", '["{\\"t\\": \\"' + "x" * 3990 + "\\ud83d" + " …")
+    assert shown["output"].endswith("x\ufffd …")
+    shown["output"].encode("utf-8")
+

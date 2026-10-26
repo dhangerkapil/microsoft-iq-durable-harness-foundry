@@ -338,10 +338,59 @@ def recorded_in_part(text: object) -> bool:
     return isinstance(text, str) and len(text) > MAX_TEXT and text.endswith(" …")
 
 
+_ESCAPE = re.compile(r'\\(u[0-9a-fA-F]{4}|["\\/bfnrt])')
+_ESCAPED = {'"': '"', "\\": "\\", "/": "/", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t"}
+
+
+def _unescape(match: re.Match[str]) -> str:
+    code = match.group(1)
+    return chr(int(code[1:], 16)) if code[0] == "u" else _ESCAPED[code]
+
+
+def text_in_part(recorded: str) -> str:
+    """A result the agent cut at MAX_TEXT characters is no longer JSON: drop the list around its text item and one
+    level of escaping, so it reads as what the tool returned, up to the cut."""
+    body = recorded[:-2].rstrip()
+    if not body.startswith('["'):
+        return recorded
+    text = _ESCAPE.sub(_unescape, body[2:])
+    # Joins escaped surrogate pairs (an emoji) and replaces a half left by the cut.
+    return text.encode("utf-16", "surrogatepass").decode("utf-16", "replace") + " …"
+
+
+def readable(value: object, depth: int = 0) -> object:
+    """JSON the agent recorded as text inside JSON (a tool's text items, a passage's JSON), parsed: the X-ray shows it
+    as JSON rather than escaped strings, and redaction by field name reaches inside it."""
+    if depth > 8:
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if text[:1] in ("[", "{") and text[-1:] in ("]", "}"):
+            try:
+                return readable(json.loads(text), depth + 1)
+            except json.JSONDecodeError:
+                pass
+        return text_in_part(value) if depth == 0 and recorded_in_part(value) else value
+    if isinstance(value, list):
+        items = [readable(item, depth + 1) for item in value]
+        # The agent records a tool's result as its text items: one item is shown as its content (only that outer list).
+        return items[0] if depth <= 1 and len(items) == 1 and isinstance(items[0], (dict, list)) else items
+    if isinstance(value, dict):
+        return {key: readable(child, depth + 1) for key, child in value.items()}
+    return value
+
+
+def shown_payload(value: object) -> tuple[str, bool]:
+    try:
+        return payload_text(readable(value))
+    except Exception:  # the display must never cost the X-ray its row
+        return payload_text(value)
+
+
 def lane_payload(arguments: object, output: object) -> dict:
     """A specialist's call's input and output for the X-ray, redacted like a lead call's (payloads.payload_text)."""
-    inputs, inputs_cut = payload_text(arguments) if arguments else ("", False)
-    outputs, outputs_cut = payload_text(output) if output else ("", False)
+    inputs, inputs_cut = shown_payload(arguments) if arguments else ("", False)
+    outputs, outputs_cut = shown_payload(output) if output else ("", False)
     return {"input": inputs or None, "output": outputs or None,
             "input_truncated": inputs_cut or recorded_in_part(arguments),
             "output_truncated": outputs_cut or recorded_in_part(output)}
