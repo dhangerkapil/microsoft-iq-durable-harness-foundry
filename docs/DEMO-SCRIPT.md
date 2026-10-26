@@ -529,6 +529,7 @@ or a figure nobody said." Not for customer demos: the discussion isn't repeatabl
 | You see | Do |
 |---|---|
 | An answer runs long | Keep narrating; the T-10 backup session has a finished brief. |
+| "Hosted agent failed (server_error)" | A model-service hiccup (once in 771 requests in the week before the demo): **New session** and send it again. For a brief, open the T-10 backup session while it runs. |
 | An orange consent banner | Click each **Authorize** link once, finish sign-in, then **Retry: send my last message again**. |
 | "in-flight turn", or a session that won't answer after 7.2 | That session crashed on purpose: **New session**. |
 | No approval card | **New session** and send 6.3 again; typing "approve" does nothing. |
