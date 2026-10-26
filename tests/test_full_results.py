@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
@@ -156,4 +157,44 @@ def test_a_non_streamed_answer_gets_the_cited_items_too():
     response = AgentResponse(messages=[Message(role="assistant", contents=[Content.from_text("Answer.")])])
     ShowResultInFull(ToolTimingRecorder(), cited(EMAIL)).complete(response)
     assert response.messages[-1].text.strip().startswith("```workiq_references") and EMAIL["url"] in response.text
+
+
+FILE = {"title": "IPS v2 DRAFT.docx", "kind": "file", "drive_id": "b!c3ludGhldGlj",
+        "url": "https://contoso.sharepoint.com/_layouts/15/Doc.aspx?sourcedoc=%7B1A2B%7D&file=IPS%20v2%20DRAFT.docx",
+        "entity_url": "/drives/b!c3ludGhldGlj/items/01SYNTHETIC", "item_id": "01SYNTHETIC"}
+
+
+def test_references_a_specialist_writes_into_its_answer_still_become_the_advisors_sources():
+    # A client-context report once left its references field empty and listed every item as a JSON line under
+    # "### References" in its answer: the brief reached the advisor with no sources. Code moves them to the field.
+    from advisor_team.contracts import parse_report
+    from advisor_team.ui.references import references_from_text
+
+    body = "## Next meeting\n- Thursday, 10:00-11:00 AM EDT (calendar event; Work IQ)\n\n**Client documents:** IPS v2 DRAFT"
+    answer = f"{body}\n\n### References\n- {json.dumps(EMAIL)}\n- {json.dumps(FILE)}\n"
+    report = parse_report(json.dumps({"status": "ok", "answer": answer, "references": []}))
+    assert [r.title for r in report.references] == [EMAIL["title"], FILE["title"]]
+    assert report.answer == body  # the list and its heading leave the answer; everything else stays
+
+    activity = ActivityRecorder()
+    activity.add_references([r.model_dump() for r in report.references], lane="client-context")
+    response = AgentResponse(messages=[Message(role="assistant", contents=[Content.from_text("Brief.")])])
+    ShowResultInFull(ToolTimingRecorder(), activity).complete(response)
+    assert [r.url for r in references_from_text(response.text)] == [EMAIL["url"], FILE["url"]]
+
+
+def test_reference_objects_in_a_json_block_or_one_line_array_are_recovered_and_nothing_else_moves():
+    from advisor_team.contracts import parse_report
+
+    fenced = f"Facts.\n\n**Sources**\n```json\n{json.dumps([EMAIL, FILE], indent=2)}\n```"
+    report = parse_report(json.dumps({"answer": fenced, "references": [EMAIL]}))
+    assert len(report.references) == 3 and report.answer == "Facts."  # the recorder drops the repeated email
+    report = parse_report(json.dumps({"answer": f"Facts.\n{json.dumps([FILE])}"}))
+    assert [r.item_id for r in report.references] == ["01SYNTHETIC"] and report.answer == "Facts."
+
+    # JSON that isn't a reference object, links and a References section with prose all stay as written.
+    kept = ('Facts.\n- {"label": "NVDA weight", "value": "26.1%"}\n\n### References\n'
+            "- [IPS v2 DRAFT.docx](https://contoso.sharepoint.com/ips) (SharePoint)\n- [1] the calendar event")
+    report = parse_report(json.dumps({"answer": kept}))
+    assert report.references == [] and report.answer == kept
 

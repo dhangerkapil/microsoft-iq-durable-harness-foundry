@@ -83,6 +83,12 @@ TRUST: dict[str, Trust] = {
 
 _FENCE = re.compile(r"```(?:json)?\s*(\{.*\})\s*```", re.S)
 _REFERENCES = re.compile(r"```workiq_references\s*(\[.*?\])\s*```", re.S)
+# References a specialist wrote into its answer instead of the references field: a JSON code block, or one JSON object
+# (or array) per line, as a Markdown list under a "References" heading. Without the field, the advisor gets no sources.
+_JSON_BLOCK = re.compile(r"```(?:json)?[ \t]*\n([\s\S]*?)\n[ \t]*```")
+_JSON_LINE = re.compile(r"^\s*(?:[-*+]|\d+[.)])?\s*`?(\{.*\}|\[.*\])`?\s*,?\s*$")
+_REFERENCES_HEADING = re.compile(
+    r"^\s*(?:#{1,6}\s*)?\**\s*(?:microsoft 365 )?(?:references|sources|items cited)\s*:?\s*\**\s*:?\s*$", re.I)
 
 
 def parse_report(text: str) -> SpecialistReport:
@@ -107,7 +113,64 @@ def parse_report(text: str) -> SpecialistReport:
         except (json.JSONDecodeError, ValidationError):
             pass
     report.answer = _REFERENCES.sub("", report.answer).strip()
+    written, report.answer = references_in_answer(report.answer)
+    report.references.extend(written)
     return report
+
+
+def _cited(value: object) -> list[Reference] | None:
+    """The references, when value is a reference object or a list of them (a title and a link or an ID each)."""
+    items = value if isinstance(value, list) else [value]
+    if not items or not all(
+        isinstance(item, dict) and isinstance(item.get("title"), str)
+        and any(isinstance(item.get(key), str) and item[key] for key in ("url", "entity_url", "item_id"))
+        for item in items
+    ):
+        return None
+    try:
+        return [Reference.model_validate(item) for item in items]
+    except ValidationError:
+        return None
+
+
+def _parsed(text: str) -> object:
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def references_in_answer(answer: str) -> tuple[list[Reference], str]:
+    """References a specialist wrote into its answer's text instead of the references field (which the advisor's
+    sources come from), and the answer without them. Anything that isn't a reference object stays."""
+    found: list[Reference] = []
+
+    def block(match: re.Match[str]) -> str:
+        cited = _cited(_parsed(match.group(1)))
+        if not cited:
+            return match.group(0)
+        found.extend(cited)
+        return ""
+
+    text = _JSON_BLOCK.sub(block, answer)
+    lines: list[str] = []
+    for line in text.splitlines():
+        match = _JSON_LINE.match(line)
+        cited = _cited(_parsed(match.group(1))) if match else None
+        if cited:
+            found.extend(cited)
+        else:
+            lines.append(line)
+    if not found:
+        return [], answer
+    kept: list[str] = []
+    for index, line in enumerate(lines):
+        if _REFERENCES_HEADING.match(line):
+            following = next((rest for rest in lines[index + 1:] if rest.strip()), None)
+            if following is None or following.lstrip().startswith("#"):
+                continue  # the heading of the list just moved, with nothing left under it
+        kept.append(line)
+    return found, re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
 
 
 def unavailable(reason: str) -> SpecialistReport:
