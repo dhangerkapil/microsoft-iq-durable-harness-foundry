@@ -205,7 +205,10 @@ Then say the 30-second explainer above.
   **Input / output**: open `prepare_client_brief` to show the task (the client's name) and the finished brief.
 - **The specialist agents' calls,** each with its lane badge and a line under it that names the IQ and the identity, for
   example a `workiq / retrieve` in **Client context · Work IQ** read as you, or `search_firm_knowledge` in **Firm
-  policy · Foundry IQ** as the project's identity. (Nested calls show this line, not their raw payloads.)
+  policy · Foundry IQ** as the project's identity. The line also quotes what the call asked, so repeated rows read as
+  the separate questions they are. During the live run each call has **Input / output** too: the arguments and the
+  output as the agent recorded them (up to 4,000 characters each). The app doesn't store them, so after a reload the
+  row says so; the agent's trace in Foundry keeps every call.
 
 **Say:** "All four Microsoft IQs at once, each with the right identity: Work IQ and Fabric IQ as you, Foundry IQ as the
 firm, Web IQ for public topics only. Then a writer agent, and two checkers, before anything reached you."

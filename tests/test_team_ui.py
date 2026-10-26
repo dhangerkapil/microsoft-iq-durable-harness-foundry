@@ -93,3 +93,60 @@ def test_a_specialists_consent_link_becomes_one_banner_with_the_full_link():
         ("fabric_portfolio", fabric), ("workiq_chat_a2a", chat)]
     assert len([a for a in stream.record.activity if a.lane]) == 5
 
+
+def test_specialists_input_and_output_reach_the_browser_but_never_the_stored_run():
+    # Foundry stores only the lead's calls, so the app can't load a specialist's payload later: it streams it once.
+    sign_in = "https://login.microsoftonline.com/t/oauth2/v2.0/authorize?code=secret-code"
+    answer = "As of 10/19/2026, the total portfolio value is $2,926,762.55."
+    service_error = ('Error: ToolExecutionException: {"application/vnd.ms-workiq.retrieval": {"markdown": "x", '
+                     '"retrievalHits": [], "resultCount": 0, "stoppedReason": "error", "error": "The retrieval '
+                     'request could not be completed.", "errorCode": "InternalError"}, "requestId": "r-1"}')
+
+    def call(call_id: str, lane: str, tool: str, arguments: dict, output: str, failed: bool = False) -> dict:
+        return {"lane": lane, "tool": tool, "call_id": call_id, "started_at": "2026-10-21T06:45:15+00:00",
+                "duration_ms": 900, "failed": failed, "arguments": json.dumps(arguments), "output": output}
+
+    trim = {"current_weight_pct": 26.1, "limit_pct": 25.0, "above_limit": True, "trim_to_limit_usd": 32167.14,
+            "realized_gain_on_trim_usd": 25633.17, "trim_exceeds_tax_budget": True}
+    envelope = {"version": 1, "calls": [
+        call("p1", "portfolio", "query_portfolio_data", {"question": "Michael Scott: the total value today"},
+             json.dumps({"answer": answer, "link": sign_in})),
+        call("w1", "client-context", "workiq___retrieve",
+             {"query": "Michael Scott meeting topics", "capabilities": [{"name": "Meetings"}]}, service_error, True),
+        call("r1", "writer", "rebalancing_check", {"annual_tax_budget_usd": 20000.0}, json.dumps(trim)),
+        call("r2", "writer", "rebalancing_check", {"annual_tax_budget_usd": 15000.0}, json.dumps(trim)),
+        # The agent keeps the first 4,000 characters of a long result: too short to read back, so named by kind.
+        call("m1", "market", "search_public_web", {"query": "NVDA", "kind": "finance"}, '{"results": [' + "x" * 4000 + " …"),
+        call("s1", "market", "load_skill", {"skill_name": "public-web-research"}, "Skill text"),
+    ]}
+    stream = events()
+    stream.start_call({"call_id": "lead1", "name": "prepare_client_brief"})
+    stream.finish_arguments("lead1", "{}")
+    result = stream.finish_call({"call_id": "lead1", "output": json.dumps(
+        {TEAM_KEY: envelope, "output": {TIMING_KEY: timing("lead1", "prepare_client_brief"), "output": "brief"}})})
+
+    sent = [event for event in result if getattr(event, "name", None) == "workiq.lane_payloads"]
+    assert len(sent) == 1 and sent[0].value["run_id"] == stream.record.id
+    calls = sent[0].value["calls"]
+    assert set(calls) == {"lead1/portfolio/p1", "lead1/client-context/w1", "lead1/writer/r1", "lead1/writer/r2",
+                          "lead1/market/m1"}  # tools only: a skill's text isn't a payload
+    portfolio = calls["lead1/portfolio/p1"]
+    assert '"question": "Michael Scott: the total value today"' in portfolio["input"]
+    assert answer in portfolio["output"] and "secret-code" not in portfolio["output"]
+    assert "[redacted authentication or temporary URL]" in portfolio["output"]
+    assert calls["lead1/market/m1"]["output_truncated"] is True
+    assert calls["lead1/portfolio/p1"]["output_truncated"] is False
+
+    lines = {a.call_id.rsplit("/", 1)[-1]: a.detail for a in stream.record.activity if a.lane}
+    assert lines["p1"] == ("Fabric IQ: the Portfolio Analyst data agent answered from the portfolio lakehouse, "
+                           'as of 10/19/2026, as you · "Michael Scott: the total value today"')
+    assert lines["w1"] == ('Failed (InternalError): The retrieval request could not be completed. · '
+                           '"Michael Scott meeting topics"')
+    assert lines["r1"].endswith("over the $20,000 tax budget") and lines["r2"].endswith("over the $15,000 tax budget")
+    assert lines["m1"] == 'Web IQ finance: public results, outside the Microsoft 365 boundary · "NVDA"'
+    assert next(a for a in stream.record.activity if a.call_id == "lead1/market/s1").skill == "public-web-research"
+
+    # The stored run keeps the X-ray lines, never a payload.
+    stored = stream.record.model_dump_json()
+    assert answer not in stored and "secret-code" not in stored and '"input"' not in stored
+

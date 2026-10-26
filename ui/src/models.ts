@@ -111,6 +111,13 @@ export const ToolPayloadSchema = z.object({
   output_truncated: z.boolean(),
 });
 
+// The specialists' calls inside a lead's delegation: the input and output the agent recorded, by X-ray call ID.
+// They arrive with the live run only; the stored run never holds them.
+export const LanePayloadsSchema = z.object({
+  run_id: z.string().uuid(),
+  calls: z.record(z.string(), ToolPayloadSchema),
+});
+
 export const ChatMessageSchema = z.object({
   id: z.string(),
   role: z.enum(["user", "assistant"]),

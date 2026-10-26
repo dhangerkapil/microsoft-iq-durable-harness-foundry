@@ -130,6 +130,38 @@ describe("run progress", () => {
     expect(clean).not.toContain("Held back");
   });
 
+  it("shows a specialist agent's input and output from the live run, and says why they're gone after a reload", () => {
+    const run: Run = {
+      id: "11111111-1111-4111-8111-111111111111",
+      session_id: "22222222-2222-4222-8222-222222222222",
+      started_at: "2026-10-25T10:00:00Z", prompt_preview: "Brief", status: "completed",
+      response_id: "resp1", assistant_message_ids: [], activity: [{
+        call_id: "lead1/market/m1", name: "search_public_web", status: "completed", kind: "tool", skill: null,
+        started_at: "2026-10-25T10:00:00Z", duration_ms: 900, timing_source: "runtime", lane: "market",
+        lane_title: "Market · Web IQ", detail: "Web IQ news: 3 public result(s)",
+      }, {
+        call_id: "lead1/market/s1", name: "load_skill", status: "completed", kind: "skill", skill: "public-web-research",
+        started_at: "2026-10-25T10:00:00Z", duration_ms: 1, timing_source: "runtime", lane: "market",
+        lane_title: "Market · Web IQ",
+      }],
+    };
+    // A specialist's call is never loaded from Foundry, which doesn't store it.
+    const fromFoundry = async () => { throw new Error("not stored in Foundry"); };
+    const live = renderToStaticMarkup(<Activity run={run} loadDetails={fromFoundry} lanePayloads={{
+      "lead1/market/m1": { input: "query NVDA", output: "three results", input_truncated: false, output_truncated: true },
+    }} />);
+    expect(live.match(/Input \/ output/g)).toHaveLength(1);
+    expect(live).toContain("query NVDA");
+    expect(live).toContain("three results");
+    expect(live).toContain("(truncated)");
+    expect(live).toContain("kept in this browser only and not stored");
+    expect(live).toContain("Skill: public-web-research");
+    const reloaded = renderToStaticMarkup(<Activity run={run} loadDetails={fromFoundry} />);
+    expect(reloaded).toContain("Input / output");
+    expect(reloaded).toContain("are shown only during the live run");
+    expect(reloaded).not.toContain("query NVDA");
+  });
+
   it("shows the Work IQ calls a harness tool made inside it, under that tool", () => {
     const run: Run = {
       id: "11111111-1111-4111-8111-111111111111",

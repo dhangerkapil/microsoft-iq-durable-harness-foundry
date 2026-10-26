@@ -279,6 +279,10 @@ Specialist agents run inside a tool call of the lead agent, so their calls never
 - The app's back end unwraps it (whichever order it arrives in relative to the timing envelope) and draws one lane per
   role, the verdict card, and each nested call with its lane badge and the line naming its IQ and identity. The
   rehearsal runner reads the same records, so what it checks is what the presenter shows.
+- Foundry stores only the lead agent's own calls, and the app loads their **Input / output** from it on demand. A
+  nested call's arguments and output (as recorded, up to 4,000 characters each, with credentials and temporary sign-in
+  URLs redacted) reach the browser once, in a separate `workiq.lane_payloads` event during the live run, and stay in
+  its memory: the stored run keeps the X-ray lines, never these payloads.
 
 ## Identity and security
 

@@ -130,7 +130,10 @@ and the number check and the reviewer agent check."
 
 **1.2** Open the X-ray. Point at the lanes: Client context, Portfolio, Firm policy and Market overlapping, then Writer,
 then Compliance reviewer; and the verdict card: **Cleared by the number check and the compliance reviewer.** Point at
-the line under a `workiq / retrieve` call in the Client context lane: which IQ, and as whom.
+the line under a `workiq / retrieve` call in the Client context lane: which IQ, as whom, and what it asked. Open its
+**Input / output**: the query and what Work IQ returned (shown during the live run only: the app doesn't store a
+specialist agent's payloads). If the card reads **Not cleared**, read one finding aloud: the checkers held the brief
+back and say why. Then show the T-10 backup brief.
 
 **Say:** "All four Microsoft IQs, each with the right identity: Work IQ and Fabric IQ as you, Foundry IQ as the firm,
 Web IQ for public topics only. And nothing reached you until two checkers passed it."

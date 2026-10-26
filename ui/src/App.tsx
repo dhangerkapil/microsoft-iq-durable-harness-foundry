@@ -13,6 +13,7 @@ import {
   ConsentSchema,
   ConversationSchema,
   DocumentPageSchema,
+  LanePayloadsSchema,
   PreviewSchema,
   ReferencesEventSchema,
   RunSchema,
@@ -134,7 +135,28 @@ function ToolDetails({ run, callId, load }: { run: Run; callId: string; load: Lo
   </details>;
 }
 
-export const Activity = memo(function Activity({ run, loadDetails }: { run: Run; loadDetails: LoadToolDetails }) {
+// A specialist's call runs inside the lead's tool call, so Foundry doesn't store it: its input and output reach the
+// app once, with the live run, and stay in this browser.
+function LaneDetails({ payload }: { payload?: ToolPayload }) {
+  return <details className="tool-details">
+    <summary>Input / output</summary>
+    <div>
+      {payload ? <>
+        <h4>Input {payload.input_truncated && <small>(truncated)</small>}</h4>
+        <pre>{payload.input ?? "No input was recorded."}</pre>
+        <h4>Output {payload.output_truncated && <small>(truncated)</small>}</h4>
+        <pre>{payload.output ?? "No output was recorded."}</pre>
+        <p className="activity-note">As the agent recorded them during this run (up to 4,000 characters each), kept in
+          this browser only and not stored. Credential fields and temporary authentication URLs are redacted.</p>
+      </> : <p className="activity-note">A specialist agent&apos;s input and output are shown only during the live run:
+        they aren&apos;t stored, so they&apos;re gone after a reload. The agent&apos;s trace in Foundry keeps every call.</p>}
+    </div>
+  </details>;
+}
+
+export const Activity = memo(function Activity({ run, loadDetails, lanePayloads }: {
+  run: Run; loadDetails: LoadToolDetails; lanePayloads?: Record<string, ToolPayload>;
+}) {
   const labels = {
     running: "Running", awaiting_approval: "Awaiting your approval", completed: "Returned", failed: "Error",
     cancelled: "Interrupted",
@@ -186,6 +208,7 @@ export const Activity = memo(function Activity({ run, loadDetails }: { run: Run;
               {toolDuration(call)}
             </small>
           </div>
+          {call.kind === "tool" && call.lane && <LaneDetails payload={lanePayloads?.[call.call_id]} />}
           {call.kind !== "search" && !call.lane && <ToolDetails run={run} callId={call.call_id} load={loadDetails} />}
         </div>)}</>}
       <p className="activity-note">Actual hosted-agent calls only: Work IQ, Fabric IQ, Foundry IQ, Web IQ, client memory and harness checks. Private reasoning is not shown.</p>
@@ -322,6 +345,8 @@ export function App() {
   const [documentPage, setDocumentPage] = useState<DocumentPage | null>(null);
   const [sourceView, setSourceView] = useState<SourceView | null>(null);
   const [approvals, setApprovals] = useState<Approval[]>([]);
+  // The specialists' calls' input and output, by run and call ID: from the live stream only, never stored.
+  const [lanePayloads, setLanePayloads] = useState<Record<string, Record<string, ToolPayload>>>({});
   const [packsOpen, setPacksOpen] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -598,6 +623,9 @@ export function App() {
             const run = RunSchema.parse(event.value);
             if (run.session_id !== identifier) throw new Error("Mismatched session activity.");
             updateConversation(identifier, (value) => ({ ...value, runs: mergeRun(value.runs, run) }));
+          } else if (event.name === "workiq.lane_payloads") {
+            const value = LanePayloadsSchema.parse(event.value);
+            setLanePayloads((all) => ({ ...all, [value.run_id]: { ...all[value.run_id], ...value.calls } }));
           } else if (event.name === "workiq.references") {
             messageBuffer.flush();
             const value = ReferencesEventSchema.parse(event.value);
@@ -753,6 +781,7 @@ export function App() {
     setRunning(new Set());
     setConsent([]);
     setApprovals([]);
+    setLanePayloads({});
     setReference(null);
     setPreview(null);
     setDocumentPage(null);
@@ -916,9 +945,9 @@ export function App() {
             </button>)}
           </div>}
           {conversation?.runs.filter((run) => run.assistant_message_ids.at(-1) === message.id)
-            .map((run) => <Activity key={run.id} run={run} loadDetails={loadToolDetails} />)}
+            .map((run) => <Activity key={run.id} run={run} loadDetails={loadToolDetails} lanePayloads={lanePayloads[run.id]} />)}
         </article>)}
-        {unattached.map((run) => <Activity key={run.id} run={run} loadDetails={loadToolDetails} />)}
+        {unattached.map((run) => <Activity key={run.id} run={run} loadDetails={loadToolDetails} lanePayloads={lanePayloads[run.id]} />)}
         {account && selected && approvals.map((item) => <ApprovalCard key={item.id} approval={item} disabled={isRunning}
           decide={(decision) => void send("", decision)} />)}
       </div>

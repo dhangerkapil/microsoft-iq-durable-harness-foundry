@@ -18,11 +18,12 @@ from ag_ui.core import (
 )
 from fastapi import HTTPException
 
-from ..activity import now_iso, unwrap_team_output
+from ..activity import MAX_TEXT, now_iso, unwrap_team_output
 from ..execution import TIMING_KEY, tool_output_failed, unwrap_tool_output
 from ..progress import SOURCE_SEARCH_PREFIX, SearchSource
 from ..tool_arguments import call_arguments
 from .models import RunRecord, ToolActivity
+from .payloads import payload_text
 from .references import INSPECT_TOOL, VerifiedPages, references_from_text
 from .store import now
 
@@ -91,6 +92,11 @@ def duration_text(milliseconds: object) -> str:
 
 def usd(value: object) -> str:
     return f"${value:,.2f}" if isinstance(value, (int, float)) and not isinstance(value, bool) else "an unknown amount"
+
+
+def whole_usd(value: float) -> str:
+    """$20,000 rather than $20,000.00 for a round amount, such as a budget."""
+    return f"${value:,.0f}" if float(value).is_integer() else usd(value)
 
 
 # The as-of date at the start of a Fabric IQ answer, such as "As of 10/19/2026" or "as of **2026-10-19**".
@@ -256,9 +262,13 @@ def iq_detail(name: str, output: object, arguments: str = "") -> str | None:
         weight, limit = value.get("current_weight_pct"), value.get("limit_pct")
         if not value.get("above_limit"):
             return f"Harness check, in code: {weight}% is within the {limit}% limit"[:300]
+        # The writer checks a trim against each budget in the story (the signed one and the accountant's): name it.
+        budget = call_values(arguments).get("annual_tax_budget_usd")
+        named = f" {whole_usd(budget)}" if isinstance(budget, (int, float)) and not isinstance(budget, bool) else ""
         return (f"Harness check, in code: {weight}% against the {limit}% limit; a trim to the limit sells "
                 f"{usd(value.get('trim_to_limit_usd'))} and realizes {usd(value.get('realized_gain_on_trim_usd'))}"
-                + (", over the tax budget" if value.get("trim_exceeds_tax_budget") else ", within the tax budget"))[:300]
+                + (f", over the{named} tax budget" if value.get("trim_exceeds_tax_budget")
+                   else f", within the{named} tax budget"))[:300]
     if name == "run_durable_meeting_pack":
         report = value.get("durability") if isinstance(value.get("durability"), dict) else {}
         marker = report.get("progress_marker") if isinstance(report.get("progress_marker"), dict) else {}
@@ -267,6 +277,74 @@ def iq_detail(name: str, output: object, arguments: str = "") -> str | None:
         return (f"Attempt {value.get('attempt')}: restored {counts[0]} checkpoint(s), reused {counts[1]} written "
                 f"before a stop, ran {counts[2]} phase(s); progress marker {marker.get('next_wave')}")[:300]
     return None
+
+
+# The argument that says what a specialist's call asked, in the order tools name it.
+ASKED_FIELDS = ("question", "userQuestion", "query")
+
+
+def asked(arguments: str) -> str | None:
+    """What a call asked, in a few words: tells apart a specialist's several calls to the same tool."""
+    values = call_values(arguments)
+    for key in ASKED_FIELDS:
+        text = values.get(key)
+        if isinstance(text, str) and text.strip():
+            text = " ".join(text.split())
+            return f'"{text[:80]}…"' if len(text) > 80 else f'"{text}"'
+    return None
+
+
+def failure_detail(output: object) -> str:
+    """Why a call failed, in the service's own words and code when its error carries them."""
+    text = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False, default=str)
+    start = text.find("{")
+    # A raised error reaches the record as "Error: <type>: <the service's JSON>".
+    value = tool_json(text) or (tool_json(text[start:]) if start > 0 else None)
+    message: object = None
+    code: object = None
+    if value:
+        inner = next((v for v in value.values() if isinstance(v, dict) and ("error" in v or "errorCode" in v)), value)
+        message = inner.get("error") or inner.get("message") or inner.get("reason") or inner.get("status")
+        code = inner.get("errorCode")
+    if not isinstance(message, str) or not message.strip():
+        message = re.sub(r"^Error:\s*(?:\w+:\s*)?", "", text.strip())
+    reason = " ".join(str(message).split())
+    return (f"Failed ({code}): {reason}" if isinstance(code, str) and code else f"Failed: {reason}")[:300]
+
+
+def lane_detail(name: str, output: object, arguments: str, failed: bool) -> str | None:
+    """A specialist's X-ray line: which IQ it reached and what came back (or why it failed), then what it asked."""
+    value = tool_json(output) or output
+    detail: str | None = None
+    try:
+        # A failed Work IQ call has no result to describe; its error says what happened.
+        if not (failed and name.startswith("workiq___")):
+            detail = harness_detail(name, value) or iq_detail(name, value, arguments)
+    except Exception:
+        detail = None
+    if failed:
+        detail = detail or failure_detail(output)
+    elif detail is None and name == "search_public_web":
+        # A long result is kept in part in the agent's record, too short to read back: name the kind of search.
+        detail = f"Web IQ {call_values(arguments).get('kind', 'news')}: public results, outside the Microsoft 365 boundary"
+    question = asked(arguments)
+    if question:
+        detail = f"{detail} · {question}" if detail else question
+    return detail[:300] if detail else None
+
+
+def recorded_in_part(text: object) -> bool:
+    """The agent keeps the first MAX_TEXT characters of a specialist's arguments and output, marked with " …"."""
+    return isinstance(text, str) and len(text) > MAX_TEXT and text.endswith(" …")
+
+
+def lane_payload(arguments: object, output: object) -> dict:
+    """A specialist's call's input and output for the X-ray, redacted like a lead call's (payloads.payload_text)."""
+    inputs, inputs_cut = payload_text(arguments) if arguments else ("", False)
+    outputs, outputs_cut = payload_text(output) if output else ("", False)
+    return {"input": inputs or None, "output": outputs or None,
+            "input_truncated": inputs_cut or recorded_in_part(arguments),
+            "output_truncated": outputs_cut or recorded_in_part(output)}
 
 
 class ResponseEvents:
@@ -436,10 +514,14 @@ class ResponseEvents:
 
     def add_team_records(self, parent: str, team: dict) -> list[BaseEvent]:
         """The specialists' calls inside one of the lead's delegations, as nested X-ray entries in their lanes. Returns
-        the consent banners for a specialist's Fabric IQ or Work IQ Chat call that needs the user's consent: its link
-        reaches the app only here, intact (the specialist's model would retell it)."""
+        the consent banners for a specialist's Fabric IQ or Work IQ Chat call that needs the user's consent (its link
+        reaches the app only here, intact: the specialist's model would retell it), then the calls' input and output.
+
+        Foundry stores only the lead's own calls, so a specialist's input and output exist only in this stream: they
+        go to the browser in their own event (workiq.lane_payloads), never into the run record that Cosmos keeps."""
         consent: list[BaseEvent] = []
         links: set[str] = set()
+        payloads: dict[str, dict] = {}
         titles = {"client-context": "Client context · Work IQ", "portfolio": "Portfolio · Fabric IQ",
                   "firm-policy": "Firm policy · Foundry IQ", "market": "Market · Web IQ",
                   "writer": "Writer · math in code", "reviewer": "Compliance reviewer · Foundry IQ",
@@ -452,6 +534,7 @@ class ResponseEvents:
                 continue
             raw = call.get("output") or ""
             value = tool_json(raw) or raw
+            arguments = call.get("arguments") if isinstance(call.get("arguments"), str) else ""
             failed = bool(call.get("failed"))
             activity = ToolActivity(
                 call_id=identifier[:512], name=str(call["tool"])[:512],
@@ -461,12 +544,12 @@ class ResponseEvents:
                 timing_source="runtime", lane=str(call.get("lane") or "")[:64] or None,
                 lane_title=titles.get(str(call.get("lane")), str(call.get("lane") or ""))[:64] or None,
             )
-            if not failed:
-                try:
-                    detail = harness_detail(activity.name, value) or iq_detail(activity.name, value, call.get("arguments") or "")
-                    activity.detail = detail[:300] if detail else None
-                except Exception:
-                    activity.detail = None
+            if activity.kind == "tool":
+                activity.detail = lane_detail(activity.name, raw, arguments, failed)
+                payloads[activity.call_id] = lane_payload(arguments, raw)
+            else:
+                skill = call_values(arguments).get("skill_name")
+                activity.skill = skill[:100] if isinstance(skill, str) and skill else None
             self.calls[identifier] = activity
             self.record.activity.append(activity)
             for event in self.tool_consent(activity.name, value):
@@ -478,6 +561,9 @@ class ResponseEvents:
         self.record.team_steps.extend(steps[:200])
         if isinstance(team.get("verdict"), dict):
             self.record.team_verdict = team["verdict"]
+        if payloads:
+            consent.append(CustomEvent(name="workiq.lane_payloads",
+                                       value={"run_id": self.record.id, "calls": payloads}))
         return consent
 
     def tool_consent(self, name: str, output: object) -> list[BaseEvent]:
