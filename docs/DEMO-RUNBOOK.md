@@ -36,7 +36,9 @@ prompt. Each step's time is in the [timing table](#timing-table).
 - **The sources open.** A specialist agent that mis-copies a cited item's ID (about one in seven Outlook items in
   rehearsals) gets it repaired when its report is recorded, against everything its tools returned; an item that still
   can't be matched is left as cited, and the app offers **Open original** instead of guessing. The source check
-  (`scripts/check_sources.py`) opened every cited item of both runs: 67 and 48 of them.
+  (`scripts/check_sources.py`) opened every cited item of both runs: 67 and 48 of them. A specialist agent that lists
+  its cited items in its answer instead of its references field (once, on 2026-10-26: that brief came with no source
+  links) has them moved back in code since version 37; the next brief on version 37 came with 11 source links.
 - **Fabric IQ is the slowest IQ.** One long question to Fabric's data agent took about 100 s, the limit on a tool call,
   and timed out when two runs used Fabric at the same moment; the portfolio agent now sends two short questions in
   parallel (2.2 in 93-122 s). Don't run rehearsals, evaluations or the optimizer while presenting.
